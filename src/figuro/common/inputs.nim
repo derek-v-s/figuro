@@ -21,6 +21,18 @@ variantp RenderCommands:
   RenderUpdate(n: Renders, window: AppWindow)
   RenderSetTitle(name: string)
 
+variantp SystemEvent:
+  # System Events without data
+  SysCloseRequest             # Window close requested
+  # SysGotFocus                 # Window gained focus
+  # SysLostFocus                # Window lost focus
+  # SysMinimized                # Window was minimized
+  # SysRestored                 # Window was restored (from minimized/maximized)
+  # SysMaximized                # Window was maximized (Optional, may be covered by Resized/Restored)
+  # # System Events with data
+  # SysWindowMoved(pos: Position) # Window moved to new position
+  # SysWindowResized(size: Size)  # Window resized to new size
+
 type AppInputs* = object
   empty*: bool
   mouse*: Mouse

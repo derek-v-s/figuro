@@ -1,4 +1,4 @@
-import std/[hashes, os, strformat, tables, times, monotimes, unicode]
+import std/[hashes, os, strformat, tables, times, monotimes, unicode, json]
 export tables
 
 import pkg/threading/atomics
@@ -22,6 +22,7 @@ type Renderer* = ref object
   window*: Window
   uxInputList*: RChan[AppInputs]
   rendInputList*: RChan[RenderCommands]
+  systemEvents*: RChan[SystemEvent]
   frame*: WeakRef[AppFrame]
   lock*: Lock
   updated*: Atomic[bool]
@@ -44,6 +45,7 @@ proc newRenderer*(
     newContext(atlasSize = atlasSize, pixelate = false, pixelScale = app.pixelScale)
   renderer.uxInputList = newRChan[AppInputs](5)
   renderer.rendInputList = newRChan[RenderCommands](5)
+  renderer.systemEvents = newRChan[SystemEvent](20)
   renderer.lock.initLock()
   frame[].uxInputList = renderer.uxInputList
   frame[].rendInputList = renderer.rendInputList
@@ -295,7 +297,7 @@ proc render(
   # finally:
   #   ctx.restoreTransform()
 
-  # echo "draw:children: ", repr childIdxs 
+  # echo "draw:children: ", repr childIdxs
   for childIdx in childIndex(nodes, nodeIdx):
     ctx.render(nodes, childIdx, nodeIdx)
 
@@ -355,7 +357,7 @@ proc pollAndRender*(renderer: Renderer, poll = true) =
 
   if poll:
     windex.pollEvents()
-  
+
   var update = false
   var cmd: RenderCommands
   while renderer.rendInputList.tryRecv(cmd):
@@ -375,10 +377,32 @@ proc pollAndRender*(renderer: Renderer, poll = true) =
   if update:
     renderAndSwap(renderer)
 
+type
+  WindowConfig* = object
+    pos*: IVec2 = ivec2(100, 100)
+    size*: IVec2 = ivec2(0, 0)
+
+proc writeWindowConfig*(window: Window, winCfgFile: string) =
+    try:
+      let wc = WindowConfig(pos: window.pos, size: window.size)
+      let jn = %*(wc)
+      writeFile(winCfgFile, $(jn))
+    except Defect, CatchableError:
+      debug "error writing window position"
+
 proc runRendererLoop*(renderer: Renderer) =
   threadEffects:
     RenderThread
   while app.running:
+    var sysEvent: SystemEvent
+    while renderer.systemEvents.tryRecv(sysEvent):
+      match sysEvent:
+        SysCloseRequest:
+          # Access renderer state directly
+          if renderer.frame[].saveWindowState:
+            let winCfgFile = renderer.frame[].configFile & ".window"
+            writeWindowConfig(renderer.window, winCfgFile)
+          app.running = false
     pollAndRender(renderer)
 
     # let avgMicros = time.micros.toInt() div 1_000

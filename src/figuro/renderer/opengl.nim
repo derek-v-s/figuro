@@ -6,7 +6,7 @@ import pkg/pixie
 import pkg/windex
 import pkg/sigils/weakrefs
 
-import pkg/chronicles 
+import pkg/chronicles
 
 import ../commons
 import ../common/rchannels
@@ -42,7 +42,7 @@ type
     pos*: IVec2 = ivec2(100, 100)
     size*: IVec2 = ivec2(0, 0)
 
-proc windowCfgFile*(frame: WeakRef[AppFrame]): string = 
+proc windowCfgFile*(frame: WeakRef[AppFrame]): string =
   frame[].configFile & ".window"
 
 proc loadLastWindow*(frame: WeakRef[AppFrame]): WindowConfig =
@@ -75,17 +75,19 @@ proc getWindowInfo*(window: Window): AppWindow =
     result.box.w = size.x.float32.descaled()
     result.box.h = size.y.float32.descaled()
 
+proc setupCloseRequestCallback(win: Window, eventChan: RChan[SystemEvent]) =
+  # Inside this proc, 'renderer' is not directly captured.
+  # The closure below will only capture 'eventChan'.
+  win.onCloseRequest = proc() =
+    discard eventChan.trySend(SysCloseRequest())
+
 proc configureWindowEvents(renderer: Renderer) =
   let window = renderer.window
   let winCfgFile = renderer.frame.windowCfgFile()
-
+  let eventChan = renderer.systemEvents
   window.runeInputEnabled = true
 
-  window.onCloseRequest = proc() =
-    notice "onCloseRequest"
-    if renderer.frame[].saveWindowState: 
-      writeWindowConfig(window, winCfgFile)
-    app.running = false
+  setupCloseRequestCallback(window, eventChan)
 
   window.onMove = proc() =
     discard
